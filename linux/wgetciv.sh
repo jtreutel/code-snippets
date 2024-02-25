@@ -1,40 +1,40 @@
 alias wgetciv='download_file'
 
 download_file() {
-    if [ -z "$1" ]; then
-        echo "Usage: wgetciv [-l|--lora] [-m|--model] <URL>"
+    if [ -z "$2" ]; then
+        echo "Please enter both a switch and a URL"
         return 1
     fi
 
-    url="$1"
-    token="YOUR_API_TOKEN_HERE"  # Replace "YOUR_API_TOKEN_HERE" with your actual API token
-    filename=$(basename "$url")
-    SD_INSTALL_DIR="/path/to/stable/diffusion/installation"  # Replace "/path/to/stable/diffusion/installation" with the actual path
+    # Store the switch in a separate variable
+    switch="$1"
+    shift
 
-    # Parse command line options
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -l|--lora)
-                SD_INSTALL_DIR="$SD_INSTALL_DIR/models/Lora"
-                shift
-                ;;
-            -m|--model)
-                SD_INSTALL_DIR="$SD_INSTALL_DIR/models/Stable-diffusion"
-                shift
-                ;;
-            *)
-                echo "Usage: wgetciv [-l|--lora] [-m|--model] <URL>"
-                return 1
-                ;;
-        esac
-    done
+    # Check if the switch is -m or -l
+    case "$switch" in
+        -l|--lora)
+            SD_INSTALL_DIR="/path/stable-diffusion-webui/models/Lora"
+            ;;
+        -m|--model)
+            SD_INSTALL_DIR="/path/stable-diffusion-webui/models/Stable-diffusion"
+            ;;
+        *)
+            echo "Invalid switch. Please use -l or -m as the first argument"
+            return 1
+            ;;
+    esac
+
+    # Store the URL in a separate variable
+    url_to_download="$1"
 
     # Append token to URL if it doesn't already contain a query string
-    if [[ "$url" != *'?'* ]]; then
-        url="${url}?token=${token}"
+    token="TOKEN"  # Replace with actual token
+    if [[ "$url_to_download" != *'?'* ]]; then
+        url_to_download="${url_to_download}?token=${token}"
     else
-        url="${url}&token=${token}"
+        url_to_download="${url_to_download}&token=${token}"
     fi
 
-    wget --content-disposition -P "$SD_INSTALL_DIR" "$url"
+    # Download the file
+    wget --content-disposition -P "$SD_INSTALL_DIR" "$url_to_download"
 }
