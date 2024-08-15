@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"crc32"
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"os"
 
@@ -13,7 +13,7 @@ import (
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 )
 
-func readCsvFile(filePath string) [][]string {
+func readCsvFile(filePath string) ([][]string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		log.Fatal("Unable to read input file "+filePath+": ", err)
@@ -26,7 +26,7 @@ func readCsvFile(filePath string) [][]string {
 		log.Fatal("Unable to parse file as CSV for "+filePath+": ", err)
 	}
 
-	return records
+	return records, err
 }
 
 func createGcpSecrets(records [][]string, gcpProject string) {
@@ -59,7 +59,8 @@ func createGcpSecrets(records [][]string, gcpProject string) {
 		// Call the API to create the Secret
 		result, err := c.CreateSecret(ctx, req)
 		if err != nil {
-			//return fmt.Errorf("failed to create secret: %w", err)
+			log.Printf("Failed to create secret for %s: %v", secretId, err)
+			continue // Skip this record but don't stop the entire execution
 		}
 		fmt.Fprintf(os.Stdout, "Created secret: %s\n", result.Name)
 	}
@@ -77,11 +78,11 @@ func loadGcpSecrets(records [][]string, gcpProject string) {
 	for i := 0; i < len(records); i++ {
 		secretPayload := records[i][1]
 
-		parent := gcpProject + "/secret/" + records[i][0]
+		parent := gcpProject + "/secrets/" + records[i][0]
 
 		// Compute checksum
 		crc32c := crc32.MakeTable(crc32.Castagnoli)
-		checksum := int64(crc32.Checksum(secretPayload, crc32c))
+		checksum := int64(crc32.Checksum([]byte(secretPayload), crc32c))
 
 		// Build the request.
 		req := &secretmanagerpb.AddSecretVersionRequest{
@@ -95,7 +96,8 @@ func loadGcpSecrets(records [][]string, gcpProject string) {
 		//Call API
 		result, err := c.AddSecretVersion(ctx, req)
 		if err != nil {
-			//return fmt.Errorf("failed to add secret version: %w", err)
+			log.Printf("Failed to add secret version for %s: %v", parent, err)
+			continue // Skip this record but don't stop the entire execution
 		}
 		fmt.Fprintf(os.Stdout, "Added secret version: %s\n", result.Name)
 
@@ -111,15 +113,26 @@ func main() {
 
 	flag.Parse()
 
-	records := readCsvFile(*pathPtr)
+	// Check if the project name is provided
+	if *projectNamePtr == "" {
+		log.Fatal("Error: Project name must be specified")
+	}
+
+	// Read CSV file and check for errors
+	records, err := readCsvFile(*pathPtr)
+	if err != nil {
+		log.Fatalf("Error reading CSV file: %v", err)
+	}
+
+	fmt.Println(records)
+
+	fmt.Println(*projectNamePtr)
 
 	//TODO: Add GCP auth
 
-	if *createSecretsPtr == true {
+	if *createSecretsPtr {
 		createGcpSecrets(records, *projectNamePtr)
 	}
 
 	loadGcpSecrets(records, *projectNamePtr)
-	//fmt.Println(records)
-
 }
